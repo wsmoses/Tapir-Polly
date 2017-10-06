@@ -28,6 +28,12 @@ static cl::opt<int>
                     cl::desc("Number of threads to use (0 = auto)"), cl::Hidden,
                     cl::init(0));
 
+bool polly::PollyEmitTapir = false;
+static cl::opt<bool, true>
+    PollyEmitRhino("polly-emit-tapir",
+                   cl::desc("Flag to enable Rhino code generation"), cl::Hidden,
+                   cl::location(PollyEmitTapir), cl::init(false));
+
 // We generate a loop of either of the following structures:
 //
 //              BeforeBB                      BeforeBB
