@@ -97,7 +97,7 @@ Value *polly::createLoop(Value *LB, Value *UB, Value *Stride,
 
   // Notify the annotator (if present) that we have a new loop, but only
   // after the header block is set.
-  if (Annotator)
+  if (Annotator && !PollyEmitTapir)
     Annotator->pushLoop(NewLoop, Parallel);
 
   // ExitBB
@@ -137,7 +137,7 @@ Value *polly::createLoop(Value *LB, Value *UB, Value *Stride,
 
   // Create the loop latch and annotate it as such.
   BranchInst *B = Builder.CreateCondBr(LoopCondition, HeaderBB, ExitBB);
-  if (Annotator)
+  if (Annotator && !PollyEmitTapir)
     Annotator->annotateLoopLatch(B, NewLoop, Parallel);
 
   IV->addIncoming(IncrementedIV, HeaderBB);
@@ -148,6 +148,43 @@ Value *polly::createLoop(Value *LB, Value *UB, Value *Stride,
 
   // The loop body should be added here.
   Builder.SetInsertPoint(HeaderBB->getFirstNonPHI());
+
+  if (Parallel && PollyEmitTapir) {
+    auto *LatchBB = SplitBlock(HeaderBB, &*Builder.GetInsertPoint(), &DT, &LI);
+    LatchBB->setName("polly.loop_latch");
+
+    auto *BodyBB = BasicBlock::Create(Context, "polly.loop_body", F);
+    DT.addNewBlock(BodyBB, HeaderBB);
+
+    auto SyncRegionBuilder = IRBuilder<>(F->front().getFirstNonPHI());
+    auto SyncRegion = SyncRegionBuilder.CreateCall(
+      Intrinsic::getDeclaration(F->getParent(), Intrinsic::syncregion_start),
+      {},
+      "syncreg"
+    );
+
+    auto HeaderBBTerminator = HeaderBB->getTerminator();
+    auto DetachBuilder = IRBuilder<>(HeaderBBTerminator);
+    DetachBuilder.CreateDetach(BodyBB, LatchBB, SyncRegion);
+    HeaderBBTerminator->eraseFromParent();
+
+    auto ReattachBuilder = IRBuilder<>(BodyBB);
+    ReattachBuilder.CreateReattach(LatchBB, SyncRegion);
+
+    BodyBB->setName("polly.something_else");
+
+    auto *JoinBB = ExitBB;
+    ExitBB = SplitBlock(JoinBB, JoinBB->getFirstNonPHI(), &DT, &LI);
+    JoinBB->setName("polly.loop_join");
+
+    auto JoinBBTerminator = JoinBB->getTerminator();
+    auto SyncBuilder = IRBuilder<>(JoinBBTerminator);
+    SyncBuilder.CreateSync(ExitBB, SyncRegion);
+    JoinBBTerminator->eraseFromParent();
+
+    Builder.SetInsertPoint(BodyBB->getFirstNonPHI());
+  }
+
   return IV;
 }
 
