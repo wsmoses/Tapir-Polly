@@ -57,6 +57,7 @@ llvm::Pass *createFlattenSchedulePass();
 llvm::Pass *createDeLICMPass();
 
 extern char &CodePreparationID;
+extern bool PollyEmitTapir;
 } // namespace polly
 
 namespace {

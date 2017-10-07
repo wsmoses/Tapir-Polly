@@ -27,6 +27,9 @@ class BasicBlock;
 } // namespace llvm
 
 namespace polly {
+
+extern bool PollyEmitTapir;
+
 using namespace llvm;
 
 /// Create a scalar do/for-style loop.
