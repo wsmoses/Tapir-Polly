@@ -64,6 +64,7 @@ llvm::Pass *createDeLICMPass();
 llvm::Pass *createMaximalStaticExpansionPass();
 
 extern char &CodePreparationID;
+extern bool PollyEmitTapir;
 } // namespace polly
 
 namespace {
