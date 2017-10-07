@@ -584,7 +584,8 @@ void IslNodeBuilder::createForSequential(__isl_take isl_ast_node *For,
 
   create(Body);
 
-  Annotator.popLoop(MarkParallel);
+  if (!PollyEmitTapir)
+    Annotator.popLoop(MarkParallel);
 
   IDToValue.erase(IDToValue.find(IteratorID));
 
@@ -788,7 +789,10 @@ void IslNodeBuilder::createFor(__isl_take isl_ast_node *For) {
   }
 
   if (IslAstInfo::isExecutedInParallel(For)) {
-    createForParallel(For);
+    if (PollyEmitTapir)
+      createForSequential(For, true);
+    else
+      createForParallel(For);
     return;
   }
   bool Parallel =
