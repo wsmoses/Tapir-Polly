@@ -594,6 +594,12 @@ bool ScopDetection::isValidCFG(BasicBlock &BB, bool IsLoopBranch,
   if (!Condition)
     return invalid<ReportInvalidTerminator>(Context, /*Assert=*/true, &BB);
 
+  if (isa<DetachInst>(TI) || isa<ReattachInst>(TI) || isa<SyncInst>(TI)) {
+    // For this analysis, DetachInst, ReattachInst, and SyncInst can be regarded
+    // as unconditional branches. Therefore we can return true from here.
+    return true;
+  }
+
   // UndefValue is not allowed as condition.
   if (isa<UndefValue>(Condition))
     return invalid<ReportUndefCond>(Context, /*Assert=*/true, TI, &BB);
@@ -1106,6 +1112,18 @@ bool ScopDetection::isValidInstruction(Instruction &Inst,
 
     if (isErrorBlock(*OpInst->getParent(), Context.CurRegion, LI, DT))
       return false;
+  }
+
+  // Sync instructions are OK
+  if (isa<SyncInst>(&Inst)) {
+    return true;
+  }
+
+  // Sync region start instructions are OK
+  if (IntrinsicInst *II = dyn_cast<IntrinsicInst>(&Inst)) {
+    if (II->getIntrinsicID() == Intrinsic::syncregion_start) {
+      return true;
+    }
   }
 
   if (isa<LandingPadInst>(&Inst) || isa<ResumeInst>(&Inst))
