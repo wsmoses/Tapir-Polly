@@ -1650,7 +1650,10 @@ bool buildConditionSets(Scop &S, BasicBlock *BB, Instruction *TI, Loop *L,
     return buildConditionSets(S, BB, SI, L, Domain, InvalidDomainMap,
                               ConditionSets);
 
-  assert(isa<BranchInst>(TI) && "Terminator was neither branch nor switch.");
+  assert(
+    (isa<BranchInst>(TI) || isa<DetachInst>(TI) ||
+     isa<ReattachInst>(TI) || isa<SyncInst>(TI)) &&
+    "Terminator was none of branch, switch, detach, reattach, or sync.");
 
   if (TI->getNumSuccessors() == 1) {
     ConditionSets.push_back(isl_set_copy(Domain));
