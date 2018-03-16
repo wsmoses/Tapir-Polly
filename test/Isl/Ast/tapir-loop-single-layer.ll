@@ -2,12 +2,12 @@
 ;
 ; Single-layer loop of the form:
 ;
-; cilk_for(...) {
+; cilk_for(int i=0; i<512; i++) {
 ;     B[i] = A[i] * 2;
 ; }
 ;
-; CHECK:        for (int c0 = 0; c0 <= 63; c0 += 1)
-; CHECK-NEXT:     Stmt_vec_detached(c0);
+; CHECK: for (int c1 = 0; c1 <= 511; c1 += 1)
+; CHECK-NEXT:       Stmt_pfor_body(c1);
 
 ; ModuleID = 'test.ll'
 source_filename = "test.c"
@@ -19,54 +19,45 @@ target triple = "x86_64-unknown-linux-gnu"
 ; Function Attrs: nounwind uwtable
 define i32 @main() local_unnamed_addr #0 {
 entry:
-  %A = alloca [512 x i32], align 16
-  %B = alloca [512 x i32], align 16
+  %A = alloca [4096 x i32], align 16
+  %B = alloca [4096 x i32], align 16
   br label %entry.split
 
 entry.split:                                      ; preds = %entry
   %syncreg = tail call token @llvm.syncregion.start()
-  %0 = bitcast [512 x i32]* %A to i8*
-  call void @llvm.lifetime.start.p0i8(i64 2048, i8* nonnull %0) #3
-  %1 = bitcast [512 x i32]* %B to i8*
-  call void @llvm.lifetime.start.p0i8(i64 2048, i8* nonnull %1) #3
-  br label %vector.body
+  %0 = bitcast [4096 x i32]* %A to i8*
+  call void @llvm.lifetime.start.p0i8(i64 16384, i8* nonnull %0) #3
+  %1 = bitcast [4096 x i32]* %B to i8*
+  call void @llvm.lifetime.start.p0i8(i64 16384, i8* nonnull %1) #3
+  br label %pfor.detach
 
-vector.body:                                      ; preds = %vec.inc, %entry.split
-  %index = phi i64 [ 0, %entry.split ], [ %index.next, %vec.inc ]
-  %index.next = add nuw nsw i64 %index, 8
-  %2 = icmp eq i64 %index.next, 512
-  detach within %syncreg, label %vec.detached, label %vec.inc
-
-vec.detached:                                     ; preds = %vector.body
-  %3 = getelementptr inbounds [512 x i32], [512 x i32]* %A, i64 0, i64 %index
-  %4 = bitcast i32* %3 to <4 x i32>*
-  %wide.load = load <4 x i32>, <4 x i32>* %4, align 16, !tbaa !2
-  %5 = getelementptr i32, i32* %3, i64 4
-  %6 = bitcast i32* %5 to <4 x i32>*
-  %wide.load14 = load <4 x i32>, <4 x i32>* %6, align 16, !tbaa !2
-  %7 = shl nsw <4 x i32> %wide.load, <i32 1, i32 1, i32 1, i32 1>
-  %8 = shl nsw <4 x i32> %wide.load14, <i32 1, i32 1, i32 1, i32 1>
-  %9 = getelementptr inbounds [512 x i32], [512 x i32]* %B, i64 0, i64 %index
-  %10 = bitcast i32* %9 to <4 x i32>*
-  store <4 x i32> %7, <4 x i32>* %10, align 16, !tbaa !2
-  %11 = getelementptr i32, i32* %9, i64 4
-  %12 = bitcast i32* %11 to <4 x i32>*
-  store <4 x i32> %8, <4 x i32>* %12, align 16, !tbaa !2
-  reattach within %syncreg, label %vec.inc
-
-vec.inc:                                          ; preds = %vec.detached, %vector.body
-  br i1 %2, label %pfor.cond.cleanup, label %vector.body, !llvm.loop !6
-
-pfor.cond.cleanup:                                ; preds = %vec.inc
+pfor.cond.cleanup:                                ; preds = %pfor.inc
   sync within %syncreg, label %pfor.end.continue
 
 pfor.end.continue:                                ; preds = %pfor.cond.cleanup
-  %arrayidx4 = getelementptr inbounds [512 x i32], [512 x i32]* %B, i64 0, i64 1
-  %13 = load i32, i32* %arrayidx4, align 4, !tbaa !2
-  %call = tail call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([3 x i8], [3 x i8]* @.str, i64 0, i64 0), i32 %13)
-  call void @llvm.lifetime.end.p0i8(i64 2048, i8* nonnull %1) #3
-  call void @llvm.lifetime.end.p0i8(i64 2048, i8* nonnull %0) #3
+  %arrayidx4 = getelementptr inbounds [4096 x i32], [4096 x i32]* %B, i64 0, i64 0
+  %2 = load i32, i32* %arrayidx4, align 16, !tbaa !2
+  %call = tail call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([3 x i8], [3 x i8]* @.str, i64 0, i64 0), i32 %2)
+  call void @llvm.lifetime.end.p0i8(i64 16384, i8* nonnull %1) #3
+  call void @llvm.lifetime.end.p0i8(i64 16384, i8* nonnull %0) #3
   ret i32 0
+
+pfor.detach:                                      ; preds = %pfor.inc, %entry.split
+  %indvars.iv = phi i64 [ 0, %entry.split ], [ %indvars.iv.next, %pfor.inc ]
+  detach within %syncreg, label %pfor.body, label %pfor.inc
+
+pfor.body:                                        ; preds = %pfor.detach
+  %arrayidx = getelementptr inbounds [4096 x i32], [4096 x i32]* %A, i64 0, i64 %indvars.iv
+  %3 = load i32, i32* %arrayidx, align 4, !tbaa !2
+  %mul1 = shl nsw i32 %3, 1
+  %arrayidx3 = getelementptr inbounds [4096 x i32], [4096 x i32]* %B, i64 0, i64 %indvars.iv
+  store i32 %mul1, i32* %arrayidx3, align 4, !tbaa !2
+  reattach within %syncreg, label %pfor.inc
+
+pfor.inc:                                         ; preds = %pfor.body, %pfor.detach
+  %indvars.iv.next = add nuw nsw i64 %indvars.iv, 1
+  %exitcond = icmp eq i64 %indvars.iv.next, 512
+  br i1 %exitcond, label %pfor.cond.cleanup, label %pfor.detach, !llvm.loop !6
 }
 
 ; Function Attrs: argmemonly nounwind
@@ -95,7 +86,8 @@ attributes #3 = { nounwind }
 !3 = !{!"int", !4, i64 0}
 !4 = !{!"omnipotent char", !5, i64 0}
 !5 = !{!"Simple C/C++ TBAA"}
-!6 = distinct !{!6, !7, !8, !9}
-!7 = !{!"tapir.loop.spawn.strategy", i32 1}
-!8 = !{!"llvm.loop.vectorize.width", i32 1}
-!9 = !{!"llvm.loop.interleave.count", i32 1}
+!6 = distinct !{!6, !7, !8, !9, !10}
+!7 = !{!"llvm.loop.vectorize.width", i32 1}
+!8 = !{!"llvm.loop.interleave.count", i32 1}
+!9 = !{!"llvm.loop.unroll.disable"}
+!10 = !{!"tapir.loop.spawn.strategy", i32 1}
