@@ -172,10 +172,12 @@ std::string stringFromIslObj(__isl_keep isl_union_map *umap);
 std::string stringFromIslObj(__isl_keep isl_set *set);
 std::string stringFromIslObj(__isl_keep isl_union_set *uset);
 std::string stringFromIslObj(__isl_keep isl_schedule *schedule);
+std::string stringFromIslObj(__isl_keep isl_schedule_node *node);
 std::string stringFromIslObj(__isl_keep isl_multi_aff *maff);
 std::string stringFromIslObj(__isl_keep isl_pw_multi_aff *pma);
 std::string stringFromIslObj(__isl_keep isl_multi_pw_aff *mpa);
 std::string stringFromIslObj(__isl_keep isl_union_pw_multi_aff *upma);
+std::string stringFromIslObj(__isl_keep isl_multi_union_pw_aff *mupa);
 std::string stringFromIslObj(__isl_keep isl_aff *aff);
 std::string stringFromIslObj(__isl_keep isl_pw_aff *pwaff);
 std::string stringFromIslObj(__isl_keep isl_space *space);
@@ -224,8 +226,20 @@ inline llvm::raw_ostream &operator<<(llvm::raw_ostream &OS,
 }
 
 inline llvm::raw_ostream &operator<<(llvm::raw_ostream &OS,
+                                     __isl_keep isl_multi_union_pw_aff *MUPA) {
+  OS << polly::stringFromIslObj(MUPA);
+  return OS;
+}
+
+inline llvm::raw_ostream &operator<<(llvm::raw_ostream &OS,
                                      __isl_keep isl_schedule *Schedule) {
   OS << polly::stringFromIslObj(Schedule);
+  return OS;
+}
+
+inline llvm::raw_ostream &operator<<(llvm::raw_ostream &OS,
+                                     __isl_keep isl_schedule_node *Node) {
+  OS << polly::stringFromIslObj(Node);
   return OS;
 }
 

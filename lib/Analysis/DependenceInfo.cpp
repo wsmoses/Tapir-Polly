@@ -401,6 +401,170 @@ static isl_union_map *buildWAR(isl_union_map *Write, isl_union_map *MustWrite,
   return WAR;
 }
 
+static bool isValidDependence(__isl_keep isl_map *Dependence,
+    __isl_keep isl_schedule *Schedule) {
+  isl_schedule_node *Node = isl_schedule_get_root(Schedule);
+  bool Result = true;
+
+  do {
+    isl_schedule_node *Child = nullptr;
+    int ScheduleNodeChildNumber = isl_schedule_node_n_children(Node);
+    isl_schedule_node_type ScheduleNodeType = isl_schedule_node_get_type(Node);
+
+    switch (ScheduleNodeType) {
+    case isl_schedule_node_domain:
+      // Nothing to do here. We simply go to the next layer.
+      assert(ScheduleNodeChildNumber == 1 && "Domain node with >1 children.");
+
+      Child = isl_schedule_node_get_child(Node, 0);
+      break;
+    case isl_schedule_node_band:
+      assert(ScheduleNodeChildNumber == 1 && "Band node with >1 children.");
+
+      {
+        bool IsCoincident = isl_schedule_node_band_member_get_coincident(Node, 0);
+        auto *Band = isl_schedule_node_band_get_partial_schedule(Node);
+        auto *BandMap = isl_union_map_from_multi_union_pw_aff(Band);
+
+        auto *ScheduleDomainDependence = isl_union_map_from_map(
+          isl_map_copy(Dependence));
+
+        ScheduleDomainDependence = isl_union_map_apply_domain(ScheduleDomainDependence,
+          isl_union_map_copy(BandMap));
+        ScheduleDomainDependence = isl_union_map_apply_range(ScheduleDomainDependence,
+          isl_union_map_copy(BandMap));
+
+        isl_union_map_free(BandMap);
+
+        auto *Deltas = isl_map_deltas(isl_map_from_union_map(ScheduleDomainDependence));
+        Deltas = isl_set_upper_bound_si(Deltas, isl_dim_set, 0, 0);
+        Deltas = isl_set_lower_bound_si(Deltas, isl_dim_set, 0, 0);
+
+        bool AlwaysDifferentIteration = isl_set_is_empty(Deltas);
+        isl_set_free(Deltas);
+
+        // If we are on a coincidental band dimension, and the dependency is
+        // always between two distinct iterations, we can safely eliminate the
+        // dependency as the parallel semantic entails that the iterations
+        // are allowed to be scheduled concurrently.
+        if (AlwaysDifferentIteration && IsCoincident) {
+          DEBUG(dbgs() << "Eliminating constraint due to none-zero-distance coincident dimension.\n");
+          Result = false;
+          goto Cleanup;
+        }
+      }
+
+      Child = isl_schedule_node_get_child(Node, 0);
+      break;
+
+    case isl_schedule_node_sequence:
+      assert(ScheduleNodeChildNumber > 1 && "Sequence node with <=1 children.");
+
+      {
+        auto *From = isl_map_domain(isl_map_copy(Dependence));
+        auto *To = isl_map_range(isl_map_copy(Dependence));
+
+        int FromFilterIndex = -1;
+        int ToFilterIndex = -1;
+
+        for (int i=0; i<ScheduleNodeChildNumber; i++) {
+          auto *Filter = isl_schedule_node_get_child(Node, i);
+          assert(isl_schedule_node_get_type(Filter) == isl_schedule_node_filter &&
+            "Non-filter child found on sequence node.");
+
+          auto *FilterSet = isl_schedule_node_filter_get_filter(Filter);
+          isl_schedule_node_free(Filter);
+
+          auto *FromIntersection = isl_union_set_intersect(
+            isl_union_set_from_set(isl_set_copy(From)), isl_union_set_copy(FilterSet));
+          bool FromMatch = !isl_union_set_is_empty(FromIntersection);
+          auto *ToIntersection = isl_union_set_intersect(
+            isl_union_set_from_set(isl_set_copy(To)), isl_union_set_copy(FilterSet));
+          bool ToMatch = !isl_union_set_is_empty(ToIntersection);
+
+          isl_union_set_free(FromIntersection);
+          isl_union_set_free(ToIntersection);
+          isl_union_set_free(FilterSet);
+
+          if (FromMatch) {
+            assert(FromFilterIndex == -1 && "Dependence LHS found in >1 filters.");
+            FromFilterIndex = i;
+          }
+
+          if (ToMatch) {
+            assert(ToFilterIndex == -1 && "Dependence RHS found in >1 filters.");
+            ToFilterIndex = i;
+          }
+        }
+
+        isl_set_free(From);
+        isl_set_free(To);
+
+        assert(FromFilterIndex != -1 && "LHS not found in any filter.");
+        assert(ToFilterIndex != -1 && "RHS not found in any filter.");
+
+        DEBUG(
+          dbgs() << "LHS filter index = " << FromFilterIndex << ", " <<
+                    "RHS filter index = " << ToFilterIndex << "\n"
+        );
+
+        // If a dependency is between different filters of a sequence node,
+        // we know that they would be totally ordered regardless of future
+        // coincidental dimensions. Therefore we declare here that the dependency
+        // cannot be eliminated.
+        if (FromFilterIndex != ToFilterIndex) {
+          DEBUG(dbgs() << "Dependence is okay since LHS and RHS diverged in a sequence node." << "\n");
+          Result = true;
+          goto Cleanup;
+        }
+
+        auto *IntermediateChild = isl_schedule_node_get_child(Node, FromFilterIndex);
+        Child = isl_schedule_node_get_child(IntermediateChild, 0);
+        isl_schedule_node_free(IntermediateChild);
+      }
+
+      break;
+
+    default:
+      assert(false && "Unknown schedule node type.");
+    }
+
+    isl_schedule_node_free(Node);
+    Node = Child;
+  } while (isl_schedule_node_n_children(Node) != 0);
+
+Cleanup:
+
+  isl_schedule_node_free(Node);
+
+  return Result;
+}
+
+static isl_stat checkAndAddDependence(__isl_take isl_map *Dependence, void *User) {
+  auto **Trimmed = (isl_union_map **) ((void **) User)[0];
+  auto *Schedule = (isl_schedule *) ((void **) User)[1];
+
+  if (isValidDependence(Dependence, Schedule)) {
+    *Trimmed = isl_union_map_add_map(*Trimmed, Dependence);
+  } else {
+    isl_map_free(Dependence);
+  }
+
+  return isl_stat::isl_stat_ok;
+}
+
+static __isl_give isl_union_map *trimCoincidentDependences(
+    __isl_take isl_union_map *Dependences,
+    __isl_keep isl_schedule *Schedule) {
+  auto *Trimmed = isl_union_map_empty(isl_union_map_get_space(Dependences));
+  void *User[] = {(void *) &Trimmed, (void *) Schedule};
+
+  isl_union_map_foreach_map(Dependences, &checkAndAddDependence, User);
+  isl_union_map_free(Dependences);
+
+  return Trimmed;
+}
+
 void Dependences::calculateDependences(Scop &S) {
   isl_union_map *Read, *MustWrite, *MayWrite, *ReductionTagMap;
   isl_schedule *Schedule;
@@ -571,6 +735,24 @@ void Dependences::calculateDependences(Scop &S) {
 
     // End of max_operations scope.
   }
+
+  DEBUG(
+    dbgs() << "RAW before coincident trimming: " << RAW << "\n";
+    dbgs() << "WAW before coincident trimming: " << WAW << "\n";
+    dbgs() << "WAR before coincident trimming: " << WAR << "\n";
+  );
+
+  RAW = trimCoincidentDependences(RAW, Schedule);
+  WAW = trimCoincidentDependences(WAW, Schedule);
+  WAR = trimCoincidentDependences(WAR, Schedule);
+
+  DEBUG(
+    dbgs() << "RAW after coincident trimming:  " << RAW << "\n";
+    dbgs() << "WAW after coincident trimming:  " << WAW << "\n";
+    dbgs() << "WAR after coincident trimming:  " << WAR << "\n";
+  );
+
+
 
   if (isl_ctx_last_error(IslCtx.get()) == isl_error_quota) {
     isl_union_map_free(RAW);

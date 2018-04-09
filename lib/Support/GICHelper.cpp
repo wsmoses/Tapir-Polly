@@ -134,6 +134,11 @@ std::string polly::stringFromIslObj(__isl_keep isl_schedule *schedule) {
                                   isl_printer_print_schedule);
 }
 
+std::string polly::stringFromIslObj(__isl_keep isl_schedule_node *node) {
+  return stringFromIslObjInternal(node, isl_schedule_node_get_ctx,
+                                  isl_printer_print_schedule_node);
+}
+
 std::string polly::stringFromIslObj(__isl_keep isl_multi_aff *maff) {
   return stringFromIslObjInternal(maff, isl_multi_aff_get_ctx,
                                   isl_printer_print_multi_aff);
@@ -152,6 +157,11 @@ std::string polly::stringFromIslObj(__isl_keep isl_multi_pw_aff *mpa) {
 std::string polly::stringFromIslObj(__isl_keep isl_union_pw_multi_aff *upma) {
   return stringFromIslObjInternal(upma, isl_union_pw_multi_aff_get_ctx,
                                   isl_printer_print_union_pw_multi_aff);
+}
+
+std::string polly::stringFromIslObj(__isl_keep isl_multi_union_pw_aff *mupa) {
+  return stringFromIslObjInternal(mupa, isl_multi_union_pw_aff_get_ctx,
+                                  isl_printer_print_multi_union_pw_aff);
 }
 
 std::string polly::stringFromIslObj(__isl_keep isl_aff *aff) {

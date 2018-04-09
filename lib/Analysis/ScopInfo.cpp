@@ -4898,6 +4898,21 @@ void Scop::buildSchedule(RegionNode *RN, LoopStackTy &LoopStack, LoopInfo &LI) {
       isl::union_set Domain = give(isl_schedule_get_domain(Schedule));
       isl::multi_union_pw_aff MUPA = mapToDimension(Domain, LoopStack.size());
       Schedule = isl_schedule_insert_partial_schedule(Schedule, MUPA.release());
+
+      if (LoopData.L->isCanonicalParallelLoop()) {
+        auto *OldBand = isl_schedule_node_child(isl_schedule_get_root(Schedule), 0);
+
+        assert(isl_schedule_node_band_n_member(OldBand) == 1 &&
+            "Band node dimension number != 1");
+
+        auto *NewBand = isl_schedule_node_band_member_set_coincident(OldBand, 0, 1);
+        auto *NewSchedule = isl_schedule_node_get_schedule(NewBand);
+
+        isl_schedule_node_free(NewBand);
+        isl_schedule_free(Schedule);
+        Schedule = NewSchedule;
+      }
+
       NextLoopData.Schedule =
           combineInSequence(NextLoopData.Schedule, Schedule);
     }
