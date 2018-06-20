@@ -8,9 +8,9 @@
 ;     }
 ; }
 ;
-; CHECK: for (int c2 = 0; c2 <= 511; c2 += 1)
-; CHECK-NEXT:   for (int c3 = 0; c3 <= 511; c3 += 1)
-; CHECK-NEXT:     Stmt_pfor_body13(c2, c3);
+; CHECK: for (int c0 = 0; c0 <= 511; c0 += 1)
+; CHECK-NEXT:   for (int c1 = 0; c1 <= 511; c1 += 1)
+; CHECK-NEXT:     Stmt_pfor_body13(c0, c1);
 
 ; ModuleID = 'test.ll'
 source_filename = "test.c"
