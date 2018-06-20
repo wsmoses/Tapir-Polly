@@ -12,11 +12,11 @@
 ;     }
 ; }
 ;
-; CHECK: for (int c4 = 0; c4 <= 511; c4 += 1)
-; CHECK-NEXT:   for (int c5 = 0; c5 <= 511; c5 += 1)
-; CHECK-NEXT:     for (int c6 = 0; c6 <= 511; c6 += 1)
-; CHECK-NEXT:       for (int c7 = 0; c7 <= 511; c7 += 1)
-; CHECK-NEXT:         Stmt_for_body18(c4, c5, c6, c7);
+; CHECK: for (int c0 = 0; c0 <= 511; c0 += 1)
+; CHECK-NEXT:   for (int c1 = 0; c1 <= 511; c1 += 1)
+; CHECK-NEXT:     for (int c2 = 0; c2 <= 511; c2 += 1)
+; CHECK-NEXT:       for (int c3 = 0; c3 <= 511; c3 += 1)
+; CHECK-NEXT:         Stmt_for_body18(c0, c1, c2, c3);
 
 ; ModuleID = 'test.ll'
 source_filename = "test.c"

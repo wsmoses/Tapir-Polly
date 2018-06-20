@@ -6,8 +6,8 @@
 ;     B[i] = A[i] * 2;
 ; }
 ;
-; CHECK: for (int c1 = 0; c1 <= 511; c1 += 1)
-; CHECK-NEXT:       Stmt_pfor_body(c1);
+; CHECK: for (int c0 = 0; c0 <= 511; c0 += 1)
+; CHECK-NEXT:       Stmt_pfor_body(c0`);
 
 ; ModuleID = 'test.ll'
 source_filename = "test.c"
