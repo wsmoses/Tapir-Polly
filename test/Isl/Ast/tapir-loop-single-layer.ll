@@ -7,7 +7,7 @@
 ; }
 ;
 ; CHECK: for (int c0 = 0; c0 <= 511; c0 += 1)
-; CHECK-NEXT:       Stmt_pfor_body(c0`);
+; CHECK-NEXT:       Stmt_pfor_body(c0);
 
 ; ModuleID = 'test.ll'
 source_filename = "test.c"
