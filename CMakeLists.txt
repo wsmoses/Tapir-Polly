@@ -96,8 +96,8 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${POLLY_SOURCE_DIR}/cmake")
 
 SET(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
-option(POLLY_ENABLE_GPGPU_CODEGEN "Enable GPGPU code generation feature" OFF)
-set(GPU_CODEGEN FALSE)
+option(POLLY_ENABLE_GPGPU_CODEGEN "Enable GPGPU code generation feature" ON)
+set(GPU_CODEGEN TRUE)
 if (POLLY_ENABLE_GPGPU_CODEGEN)
   # Do not require CUDA/OpenCL, as GPU code generation test cases can be run
   # without a CUDA/OpenCL library.
