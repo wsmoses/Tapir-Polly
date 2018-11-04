@@ -755,7 +755,7 @@ void IslNodeBuilder::createFor(__isl_take isl_ast_node *For) {
 
   if (IslAstInfo::isExecutedInParallel(For)) {
     if (PollyEmitTapir)
-      createForSequential(For, true);
+      createForSequential(isl::manage(For), true);
     else
       createForParallel(For);
     return;

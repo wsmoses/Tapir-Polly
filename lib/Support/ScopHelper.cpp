@@ -405,6 +405,11 @@ bool polly::isErrorBlock(BasicBlock &BB, const Region &R, LoopInfo &LI,
 
   // Basic blocks that are always executed are not considered error blocks,
   // as their execution can not be a rare event.
+  //
+  // FIXME: Fix this analysis to account for blocks spawned by Tapir detach.
+  // These blocks do not dominate their predecessors, but may be guaranteed to
+  // execute anyway.  We can use TaskInfo to analyze these blocks, but a better
+  // option might be to use MustExecute analysis.
   bool DominatesAllPredecessors = true;
   if (R.isTopLevelRegion()) {
     for (BasicBlock &I : *R.getEntry()->getParent())
@@ -550,6 +555,8 @@ bool polly::isIgnoredIntrinsic(const Value *V) {
     // Some debug info intrinsics are supported/ignored.
     case llvm::Intrinsic::dbg_value:
     case llvm::Intrinsic::dbg_declare:
+    // Tapir sync regions are ignored
+    case llvm::Intrinsic::syncregion_start:
       return true;
     default:
       break;
